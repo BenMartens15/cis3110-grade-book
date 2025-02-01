@@ -1,3 +1,5 @@
+// Author: Ben Martens (1349551)
+
 #include "LinkedListAPI.h"
 #include "assert.h"
 
