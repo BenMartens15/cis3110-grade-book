@@ -11,8 +11,12 @@ int main() {
 
     error = createCard("../testCard.vcf", &testCard);
     if (error == OK) {
-        printf("%s\n", cardToString(testCard));
+        char* cardString = cardToString(testCard);
+        printf("%s\n", cardString);
+        free(cardString);
     } else {
         printf("Error: %d\n", error);
     }
+    deleteCard(testCard);
+    free(testCard);
 }

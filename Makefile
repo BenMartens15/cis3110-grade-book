@@ -28,4 +28,4 @@ LinkedListAPI.o: $(SRC)LinkedListAPI.c $(INC)LinkedListAPI.h
 	$(CC) -I$(INC) $(CFLAGS) -c -fpic $(SRC)LinkedListAPI.c
 
 clean:
-	rm -rf test_main $(BIN)*.so *.o
+	rm -rf $(BIN)test_main $(BIN)*.so *.o

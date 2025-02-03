@@ -66,20 +66,23 @@ VCardErrorCode createCard(char* fileName, Card** obj) {
             nextLine[strlen(nextLine) - 2] = '\0';
         }
 
-        char* property = (char *)malloc(strlen(currentLine) + 1);
+        char* property = (char*)malloc(strlen(currentLine) + 1);
         snprintf(property, strlen(currentLine) + 1, "%s", currentLine);
-        property = strtok(property, ";:");
-        if (strncasecmp(property, "FN", strlen(property)) == 0) {
+        char* token = strtok(property, ";:");
+        if (strcasecmp(property, "FN") == 0) {
             Property* newProperty = (Property*)malloc(sizeof(Property));
             newProperty->name = "FN";
             newProperty->group = "";
             newProperty->parameters = initializeList(parameterToString, deleteParameter, compareParameters);
             newProperty->values = initializeList(valueToString, deleteValue, compareValues);
-            char* value = strtok(NULL, "");
-            insertBack(newProperty->values, value);
+            token = strtok(NULL, "");
+            char* value = (char*)malloc(strlen(token) + 1);
+            strcpy(value, token);
+            insertBack(newProperty->values, (void*)value);
 
             newCard->fn = newProperty;
         }
+        free(property);
 
         // copy nextLine to currentLine
         currentLine = realloc(currentLine, strlen(nextLine) + 1);
@@ -105,13 +108,15 @@ EXIT:
     return error;
 }
 
-void deleteCard(Card* obj);
+void deleteCard(Card* obj) {
+    deleteProperty(obj->fn);
+    freeList(obj->optionalProperties);
+}
 
 char* cardToString(const Card* obj) {
-    size_t length = strlen(obj->fn->values->printData(getFromFront(obj->fn->values))) + 1; // + 1 for null terminator
-    char* cardString = (char *)malloc(length);
+    char* cardString;
 
-    snprintf(cardString, 3 + length + 1, "FN:%s\n", obj->fn->values->printData(getFromFront(obj->fn->values))); // plus 1 for newline character
+    cardString = propertyToString(obj->fn);
 
     return cardString;
 }
@@ -121,7 +126,10 @@ char* errorToString(VCardErrorCode err);
 
 // ************* List helper functions ************************************* 
 void deleteProperty(void* toBeDeleted) {
-
+    Property* property = (Property*)toBeDeleted;
+    freeList(property->parameters);
+    freeList(property->values);
+    free(property);
 }
 
 int compareProperties(const void* first,const void* second) {
@@ -129,7 +137,14 @@ int compareProperties(const void* first,const void* second) {
 }
 
 char* propertyToString(void* prop) {
-    return NULL;
+    Property* property = (Property*)prop;
+    size_t length = strlen(property->name) + 1 + strlen(property->values->printData(getFromFront(property->values)));
+
+    // assume only 1 value for now
+    char* propertyString = (char*)malloc(length + 1);
+    snprintf(propertyString, length + 1, "%s:%s", property->name, property->values->printData(getFromFront(property->values)));
+
+    return propertyString;
 }
 
 void deleteParameter(void* toBeDeleted) {
@@ -145,7 +160,8 @@ char* parameterToString(void* param) {
 }
 
 void deleteValue(void* toBeDeleted) {
-
+    char* value = (char*)toBeDeleted;
+    free(value);
 }
 
 int compareValues(const void* first,const void* second) {
@@ -153,9 +169,7 @@ int compareValues(const void* first,const void* second) {
 }
 
 char* valueToString(void* val) {
-    char* outString = (char*)malloc(strlen((char*)val));
-
-    sprintf(outString, "%s", (char*)val);
+    char* outString = (char*)val;
 
     return outString;
 }
