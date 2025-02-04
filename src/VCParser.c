@@ -107,9 +107,19 @@ void deleteCard(Card* obj) {
 }
 
 char* cardToString(const Card* obj) {
-    char* cardString;
+    char* cardString = NULL;
+    char* fullName = NULL;
+    char* optionalProperties = NULL;
 
-    cardString = propertyToString(obj->fn);
+    fullName = propertyToString(obj->fn);
+    optionalProperties = toString(obj->optionalProperties);
+
+    int length = strlen(fullName) + strlen(optionalProperties) + 1;
+    cardString = (char*)malloc(length);
+    snprintf(cardString, length, "%s%s", fullName, optionalProperties);
+
+    free(fullName);
+    free(optionalProperties); 
 
     return cardString;
 }
@@ -134,8 +144,8 @@ char* propertyToString(void* prop) {
     size_t length = strlen(property->name) + 1 + strlen(property->values->printData(getFromFront(property->values)));
 
     // assume only 1 value for now
-    char* propertyString = (char*)malloc(length + 1);
-    snprintf(propertyString, length + 1, "%s:%s", property->name, property->values->printData(getFromFront(property->values)));
+    char* propertyString = (char*)malloc(length + 2);
+    snprintf(propertyString, length + 2, "%s:%s\n", property->name, property->values->printData(getFromFront(property->values)));
 
     return propertyString;
 }
@@ -179,6 +189,7 @@ Property* createProperty(Card* card, char* stringToParse) {
     Property* newProperty = NULL;
 
     newProperty = (Property*)malloc(sizeof(Property));
+    newProperty->group = "";
     newProperty->parameters = initializeList(parameterToString, deleteParameter, compareParameters);
     newProperty->values = initializeList(valueToString, deleteValue, compareValues);
     propertyString = (char*)malloc(strlen(stringToParse) + 1);
@@ -187,23 +198,34 @@ Property* createProperty(Card* card, char* stringToParse) {
 
     if (strcasecmp(propertyString, "FN") == 0) {
         newProperty->name = "FN";
-        newProperty->group = "";
         token = strtok(NULL, "");
         char* value = (char*)malloc(strlen(token) + 1);
         strcpy(value, token);
         insertBack(newProperty->values, (void*)value);
         card->fn = newProperty;
-    } else if (strcasecmp(propertyString, "FN") == 0) {
+    } else if (strcasecmp(propertyString, "BDAY") == 0) {
         newProperty->name = "BDAY";
-        newProperty->group = "";
         token = strtok(NULL, "");
         char* value = (char*)malloc(strlen(token) + 1);
         strcpy(value, token);
         insertBack(newProperty->values, (void*)value);
-        card->fn = newProperty;
-
-        // add to list of optional properties instead
-    } else {
+        insertBack(card->optionalProperties, (void*)newProperty);
+    } else if (strcasecmp(propertyString, "GENDER") == 0) {
+        newProperty->name = "GENDER";
+        token = strtok(NULL, "");
+        char* value = (char*)malloc(strlen(token) + 1);
+        strcpy(value, token);
+        insertBack(newProperty->values, (void*)value);
+        insertBack(card->optionalProperties, (void*)newProperty);
+    } else if (strcasecmp(propertyString, "ANNIVERSARY") == 0) {
+        newProperty->name = "ANNIVERSARY";
+        token = strtok(NULL, "");
+        char* value = (char*)malloc(strlen(token) + 1);
+        strcpy(value, token);
+        insertBack(newProperty->values, (void*)value);
+        insertBack(card->optionalProperties, (void*)newProperty);
+    }
+    else {
         freeList(newProperty->parameters);
         freeList(newProperty->values);
         free(newProperty);
