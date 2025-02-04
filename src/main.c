@@ -18,5 +18,4 @@ int main() {
         printf("Error: %d\n", error);
     }
     deleteCard(testCard);
-    free(testCard);
 }

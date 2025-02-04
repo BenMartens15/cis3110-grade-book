@@ -3,6 +3,8 @@
 #define _GNU_SOURCE
 #include "VCParser.h"
 
+static Property* createProperty(Card* card, char* currentLine);
+
 // ************* Card parser ***********************************************
 VCardErrorCode createCard(char* fileName, Card** obj) {
     VCardErrorCode error = OK;
@@ -66,23 +68,13 @@ VCardErrorCode createCard(char* fileName, Card** obj) {
             nextLine[strlen(nextLine) - 2] = '\0';
         }
 
-        char* property = (char*)malloc(strlen(currentLine) + 1);
-        snprintf(property, strlen(currentLine) + 1, "%s", currentLine);
-        char* token = strtok(property, ";:");
-        if (strcasecmp(property, "FN") == 0) {
-            Property* newProperty = (Property*)malloc(sizeof(Property));
-            newProperty->name = "FN";
-            newProperty->group = "";
-            newProperty->parameters = initializeList(parameterToString, deleteParameter, compareParameters);
-            newProperty->values = initializeList(valueToString, deleteValue, compareValues);
-            token = strtok(NULL, "");
-            char* value = (char*)malloc(strlen(token) + 1);
-            strcpy(value, token);
-            insertBack(newProperty->values, (void*)value);
+        // if (createProperty(newCard, currentLine) == NULL) {
+        //     error = INV_PROP;
+        //     goto EXIT;
+        // }
 
-            newCard->fn = newProperty;
-        }
-        free(property);
+        // don't check return value for now until I have all of the properties implemented
+        createProperty(newCard, currentLine);
 
         // copy nextLine to currentLine
         currentLine = realloc(currentLine, strlen(nextLine) + 1);
@@ -111,6 +103,7 @@ EXIT:
 void deleteCard(Card* obj) {
     deleteProperty(obj->fn);
     freeList(obj->optionalProperties);
+    free(obj);
 }
 
 char* cardToString(const Card* obj) {
@@ -177,4 +170,48 @@ char* valueToString(void* val) {
 void deleteDate(void* toBeDeleted);
 int compareDates(const void* first,const void* second);
 char* dateToString(void* date);
+// **************************************************************************
+
+// ************* Static helper functions ************************************
+Property* createProperty(Card* card, char* stringToParse) {
+    char* propertyString = NULL;
+    char* token = NULL;
+    Property* newProperty = NULL;
+
+    newProperty = (Property*)malloc(sizeof(Property));
+    newProperty->parameters = initializeList(parameterToString, deleteParameter, compareParameters);
+    newProperty->values = initializeList(valueToString, deleteValue, compareValues);
+    propertyString = (char*)malloc(strlen(stringToParse) + 1);
+    snprintf(propertyString, strlen(stringToParse) + 1, "%s", stringToParse);
+    token = strtok(propertyString, ";:");
+
+    if (strcasecmp(propertyString, "FN") == 0) {
+        newProperty->name = "FN";
+        newProperty->group = "";
+        token = strtok(NULL, "");
+        char* value = (char*)malloc(strlen(token) + 1);
+        strcpy(value, token);
+        insertBack(newProperty->values, (void*)value);
+        card->fn = newProperty;
+    } else if (strcasecmp(propertyString, "FN") == 0) {
+        newProperty->name = "BDAY";
+        newProperty->group = "";
+        token = strtok(NULL, "");
+        char* value = (char*)malloc(strlen(token) + 1);
+        strcpy(value, token);
+        insertBack(newProperty->values, (void*)value);
+        card->fn = newProperty;
+
+        // add to list of optional properties instead
+    } else {
+        freeList(newProperty->parameters);
+        freeList(newProperty->values);
+        free(newProperty);
+        free(propertyString);
+        return NULL;
+    }
+
+    free(propertyString);
+    return newProperty;
+}
 // **************************************************************************
