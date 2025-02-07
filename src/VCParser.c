@@ -3,7 +3,7 @@
 #define _GNU_SOURCE
 #include "VCParser.h"
 
-static Property* createProperty(Card* card, char* currentLine);
+static Property* createProperty(Card* card, const char* currentLine);
 
 // ************* Card parser ***********************************************
 VCardErrorCode createCard(char* fileName, Card** obj) {
@@ -129,7 +129,13 @@ char* errorToString(VCardErrorCode err);
 
 // ************* List helper functions ************************************* 
 void deleteProperty(void* toBeDeleted) {
-    Property* property = (Property*)toBeDeleted;
+    Property* property = NULL;
+
+    if (toBeDeleted == NULL) {
+        return;
+    }
+    
+    property = (Property*)toBeDeleted;
     freeList(property->parameters);
     freeList(property->values);
     free(property);
@@ -140,17 +146,37 @@ int compareProperties(const void* first,const void* second) {
 }
 
 char* propertyToString(void* prop) {
-    Property* property = (Property*)prop;
+    Property* property = NULL;
+    char* propertyString = NULL;
+
+    if (prop == NULL) {
+        return NULL;
+    }
+
+    property = (Property*)prop;
     size_t length = strlen(property->name) + 1;
 
-    // assume only 1 value for now
-    char* propertyString = (char*)malloc(length + 2);
-    snprintf(propertyString, length + 1, "%s:", property->name);
+    propertyString = (char*)malloc(length + 1);
+    snprintf(propertyString, length + 1, "%s", property->name);
 
-    void* element;
-    ListIterator iter = createIterator(property->values);
-    while ((element = nextElement(&iter))) {
-        char* value = (char*)element;
+    void* paramElem;
+    ListIterator paramIter = createIterator(property->parameters);
+    while ((paramElem = nextElement(&paramIter)) != NULL) {
+        Parameter* param = (Parameter*)paramElem;
+        size_t length = 1 + strlen(param->name) + 1 + strlen(param->value) + 1;
+        propertyString = realloc(propertyString, strlen(propertyString) + length);
+        strcat(propertyString, ";");
+        strcat(propertyString, param->name);
+        strcat(propertyString, "=");
+        strcat(propertyString, param->value);
+    }
+    propertyString = realloc(propertyString, strlen(propertyString) + 2);
+    strcat(propertyString, ":");
+
+    void* valueElem;
+    ListIterator valueIter = createIterator(property->values);
+    while ((valueElem = nextElement(&valueIter)) != NULL) {
+        char* value = (char*)valueElem;
         propertyString = realloc(propertyString, strlen(propertyString) + strlen(value) + 2);
         strcat(propertyString, property->values->printData(value));
         strcat(propertyString, ";");
@@ -161,7 +187,16 @@ char* propertyToString(void* prop) {
 }
 
 void deleteParameter(void* toBeDeleted) {
+    Parameter* param = NULL;
+    
+    if (toBeDeleted == NULL) {
+        return;
+    }
 
+    param = (Parameter*)toBeDeleted;
+    free(param->name);
+    free(param->value);
+    free(param);
 }
 
 int compareParameters(const void* first,const void* second) {
@@ -169,7 +204,19 @@ int compareParameters(const void* first,const void* second) {
 }
 
 char* parameterToString(void* param) {
-    return NULL;
+    Parameter* parameter = NULL;
+    char* parameterString = NULL;
+
+    if (param == NULL) {
+        return NULL;
+    }
+
+    parameter = (Parameter*)param;
+    size_t length = strlen(parameter->name) + 1 + strlen(parameter->value) + 1;
+    parameterString = (char*)malloc(length);
+    snprintf(parameterString, length, "%s=%s", parameter->name, parameter->value);
+
+    return parameterString;
 }
 
 void deleteValue(void* toBeDeleted) {
@@ -193,9 +240,11 @@ char* dateToString(void* date);
 // **************************************************************************
 
 // ************* Static helper functions ************************************
-Property* createProperty(Card* card, char* stringToParse) {
-    char* propertyString = NULL;
-    char* token = NULL;
+Property* createProperty(Card* card, const char* stringToParse) {
+    char* propertyName = NULL;
+    char* paramString = NULL;
+    char* valueString = NULL;
+    char* propertyString = NULL; // just a temporary string so that the original one isn't modified by strtok
     Property* newProperty = NULL;
 
     newProperty = (Property*)malloc(sizeof(Property));
@@ -204,18 +253,33 @@ Property* createProperty(Card* card, char* stringToParse) {
     newProperty->values = initializeList(valueToString, deleteValue, compareValues);
     propertyString = (char*)malloc(strlen(stringToParse) + 1);
     snprintf(propertyString, strlen(stringToParse) + 1, "%s", stringToParse);
-    token = strtok(propertyString, ";:");
+    
+    valueString = strpbrk(propertyString, ":") + 1; // set valueString to everything after colon
+    paramString = strtok(propertyString, ":"); // set paramString to everything before colon
+    propertyName = strtok(paramString, ";:");
 
-    if (strcasecmp(propertyString, "FN") == 0) {
+    char* paramToken = strtok(NULL, ";");
+    while (paramToken) {
+        Parameter* newParam = (Parameter*)malloc(sizeof(Parameter));
+        int paramNameLen = strcspn(paramToken, "=");
+        newParam->name = (char*)malloc(paramNameLen + 1);
+        newParam->value = (char*)malloc(strlen(paramToken) - paramNameLen);
+        strncpy(newParam->name, paramToken, paramNameLen + 1);
+        newParam->name[paramNameLen] = '\0';
+        strncpy(newParam->value, paramToken + paramNameLen + 1, strlen(paramToken) - paramNameLen);
+        paramToken = strtok(NULL, ";");
+        insertBack(newProperty->parameters, newParam);
+    }
+    
+    char* token = strtok(valueString, ";"); // get the first value
+    if (strcasecmp(propertyName, "FN") == 0) {
         newProperty->name = "FN";
-        token = strtok(NULL, "");
         char* value = (char*)malloc(strlen(token) + 1);
         strcpy(value, token);
         insertBack(newProperty->values, (void*)value);
         card->fn = newProperty;
-    } else if (strcasecmp(propertyString, "N") == 0) {
+    } else if (strcasecmp(propertyName, "N") == 0) {
         newProperty->name = "N";
-        token = strtok(NULL, ";");
         while (token != NULL) {
             char* value = (char*)malloc(strlen(token) + 1);
             strcpy(value, token);
@@ -223,33 +287,38 @@ Property* createProperty(Card* card, char* stringToParse) {
             token = strtok(NULL, ";");
         }
         insertBack(card->optionalProperties, (void*)newProperty);
-    } else if (strcasecmp(propertyString, "BDAY") == 0) {
+    } else if (strcasecmp(propertyName, "BDAY") == 0) {
         newProperty->name = "BDAY";
-        token = strtok(NULL, "");
         char* value = (char*)malloc(strlen(token) + 1);
         strcpy(value, token);
         insertBack(newProperty->values, (void*)value);
         insertBack(card->optionalProperties, (void*)newProperty);
-    } else if (strcasecmp(propertyString, "GENDER") == 0) {
+    } else if (strcasecmp(propertyName, "GENDER") == 0) {
         newProperty->name = "GENDER";
-        token = strtok(NULL, "");
         char* value = (char*)malloc(strlen(token) + 1);
         strcpy(value, token);
         insertBack(newProperty->values, (void*)value);
         insertBack(card->optionalProperties, (void*)newProperty);
-    } else if (strcasecmp(propertyString, "ANNIVERSARY") == 0) {
+    } else if (strcasecmp(propertyName, "ANNIVERSARY") == 0) {
         newProperty->name = "ANNIVERSARY";
-        token = strtok(NULL, "");
         char* value = (char*)malloc(strlen(token) + 1);
         strcpy(value, token);
         insertBack(newProperty->values, (void*)value);
         insertBack(card->optionalProperties, (void*)newProperty);
-    } else if (strcasecmp(propertyString, "LANG") == 0) {
+    } else if (strcasecmp(propertyName, "LANG") == 0) {
         newProperty->name = "LANG";
-        token = strtok(NULL, "");
         char* value = (char*)malloc(strlen(token) + 1);
         strcpy(value, token);
         insertBack(newProperty->values, (void*)value);
+        insertBack(card->optionalProperties, (void*)newProperty);
+    } else if (strcasecmp(propertyName, "TEL") == 0) {
+        newProperty->name = "TEL";
+        while (token != NULL) {
+            char* value = (char*)malloc(strlen(token) + 1);
+            strcpy(value, token);
+            insertBack(newProperty->values, (void*)value);
+            token = strtok(NULL, ";");
+        }
         insertBack(card->optionalProperties, (void*)newProperty);
     } else {
         freeList(newProperty->parameters);
