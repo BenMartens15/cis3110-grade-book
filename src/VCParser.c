@@ -4,6 +4,7 @@
 #include "VCParser.h"
 
 static Property* createProperty(Card* card, const char* currentLine);
+static void parsePropertyValues(List* valueList, const char* name, char* valueString);
 
 // ************* Card parser ***********************************************
 VCardErrorCode createCard(char* fileName, Card** obj) {
@@ -136,6 +137,7 @@ void deleteProperty(void* toBeDeleted) {
     }
     
     property = (Property*)toBeDeleted;
+    free(property->name);
     freeList(property->parameters);
     freeList(property->values);
     free(property);
@@ -271,54 +273,50 @@ Property* createProperty(Card* card, const char* stringToParse) {
         insertBack(newProperty->parameters, newParam);
     }
     
-    char* token = strtok(valueString, ";"); // get the first value
     if (strcasecmp(propertyName, "FN") == 0) {
-        newProperty->name = "FN";
+        char* token = strtok(valueString, ";"); // get the first value
+        newProperty->name = (char*)malloc(strlen(propertyName) + 1);
+        strcpy(newProperty->name, propertyName);
         char* value = (char*)malloc(strlen(token) + 1);
         strcpy(value, token);
         insertBack(newProperty->values, (void*)value);
         card->fn = newProperty;
-    } else if (strcasecmp(propertyName, "N") == 0) {
-        newProperty->name = "N";
-        while (token != NULL) {
-            char* value = (char*)malloc(strlen(token) + 1);
-            strcpy(value, token);
-            insertBack(newProperty->values, (void*)value);
-            token = strtok(NULL, ";");
-        }
-        insertBack(card->optionalProperties, (void*)newProperty);
-    } else if (strcasecmp(propertyName, "BDAY") == 0) {
-        newProperty->name = "BDAY";
-        char* value = (char*)malloc(strlen(token) + 1);
-        strcpy(value, token);
-        insertBack(newProperty->values, (void*)value);
-        insertBack(card->optionalProperties, (void*)newProperty);
-    } else if (strcasecmp(propertyName, "GENDER") == 0) {
-        newProperty->name = "GENDER";
-        char* value = (char*)malloc(strlen(token) + 1);
-        strcpy(value, token);
-        insertBack(newProperty->values, (void*)value);
-        insertBack(card->optionalProperties, (void*)newProperty);
-    } else if (strcasecmp(propertyName, "ANNIVERSARY") == 0) {
-        newProperty->name = "ANNIVERSARY";
-        char* value = (char*)malloc(strlen(token) + 1);
-        strcpy(value, token);
-        insertBack(newProperty->values, (void*)value);
-        insertBack(card->optionalProperties, (void*)newProperty);
-    } else if (strcasecmp(propertyName, "LANG") == 0) {
-        newProperty->name = "LANG";
-        char* value = (char*)malloc(strlen(token) + 1);
-        strcpy(value, token);
-        insertBack(newProperty->values, (void*)value);
-        insertBack(card->optionalProperties, (void*)newProperty);
-    } else if (strcasecmp(propertyName, "TEL") == 0) {
-        newProperty->name = "TEL";
-        while (token != NULL) {
-            char* value = (char*)malloc(strlen(token) + 1);
-            strcpy(value, token);
-            insertBack(newProperty->values, (void*)value);
-            token = strtok(NULL, ";");
-        }
+    } else if (strcasecmp(propertyName, "SOURCE") == 0 ||
+            strcasecmp(propertyName, "KIND") == 0 ||
+            strcasecmp(propertyName, "XML") == 0 ||
+            strcasecmp(propertyName, "N") == 0 ||
+            strcasecmp(propertyName, "NICKNAME") == 0 ||
+            strcasecmp(propertyName, "PHOTO") == 0 ||
+            strcasecmp(propertyName, "GENDER") == 0 ||
+            strcasecmp(propertyName, "ADR") == 0 ||
+            strcasecmp(propertyName, "TEL") == 0 ||
+            strcasecmp(propertyName, "EMAIL") == 0 ||
+            strcasecmp(propertyName, "IIMP") == 0 ||
+            strcasecmp(propertyName, "LANG") == 0 ||
+            strcasecmp(propertyName, "TZ") == 0 ||
+            strcasecmp(propertyName, "GEO") == 0 ||
+            strcasecmp(propertyName, "TITLE") == 0 ||
+            strcasecmp(propertyName, "ROLE") == 0 ||
+            strcasecmp(propertyName, "LOGO") == 0 ||
+            strcasecmp(propertyName, "ORG") == 0 ||
+            strcasecmp(propertyName, "MEMBER") == 0 ||
+            strcasecmp(propertyName, "RELATED") == 0 ||
+            strcasecmp(propertyName, "CATEGORIES") == 0 ||
+            strcasecmp(propertyName, "NOTE") == 0 ||
+            strcasecmp(propertyName, "PRODID") == 0 ||
+            strcasecmp(propertyName, "REV") == 0 ||
+            strcasecmp(propertyName, "SOUND") == 0 ||
+            strcasecmp(propertyName, "UID") == 0 ||
+            strcasecmp(propertyName, "CLIENTPIDMAP") == 0 ||
+            strcasecmp(propertyName, "URL") == 0 ||
+            strcasecmp(propertyName, "VERSION") == 0 ||
+            strcasecmp(propertyName, "KEY") == 0 ||
+            strcasecmp(propertyName, "FBURL") == 0 ||
+            strcasecmp(propertyName, "CALADRURI") == 0 ||
+            strcasecmp(propertyName, "CALURI") == 0) {
+        newProperty->name = (char*)malloc(strlen(propertyName) + 1);
+        strcpy(newProperty->name, propertyName);
+        parsePropertyValues(newProperty->values, propertyName, valueString);
         insertBack(card->optionalProperties, (void*)newProperty);
     } else {
         freeList(newProperty->parameters);
@@ -330,5 +328,16 @@ Property* createProperty(Card* card, const char* stringToParse) {
 
     free(propertyString);
     return newProperty;
+}
+
+void parsePropertyValues(List* valueList, const char* name, char* valueString) {
+    char* token = strtok(valueString, ";"); // get the first value
+
+    while (token != NULL) {
+        char* value = (char*)malloc(strlen(token) + 1);
+        strcpy(value, token);
+        insertBack(valueList, (void*)value);
+        token = strtok(NULL, ";");
+    }
 }
 // **************************************************************************

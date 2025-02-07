@@ -10,19 +10,16 @@ BIN = bin/
 all: test_main
 
 test_main: main.o parser
-	$(CC) $(CFLAGS) -o $(BIN)test_main main.o $(LDFLAGS) -lvcparser -llist
+	$(CC) $(CFLAGS) -o $(BIN)test_main main.o $(LDFLAGS) -lvcparser
 
-main.o: $(SRC)main.c $(INC)VCParser.h
+main.o: $(SRC)main.c $(INC)VCParser.h $(INC)LinkedListAPI.h
 	$(CC) -I$(INC) $(CFLAGS) -c $(SRC)main.c
 
-parser: VCParser.o $(BIN)liblist.so
-	$(CC) -shared -o $(BIN)libvcparser.so VCParser.o
+parser: VCParser.o LinkedListAPI.o
+	$(CC) -shared -o $(BIN)libvcparser.so VCParser.o LinkedListAPI.o
 
-VCParser.o: $(SRC)VCParser.c $(INC)VCParser.h $(INC)LinkedListAPI.h LinkedListAPI.o
+VCParser.o: $(SRC)VCParser.c $(INC)VCParser.h $(INC)LinkedListAPI.h
 	$(CC) -I$(INC) $(CFLAGS) -c -fpic $(SRC)VCParser.c
-
-$(BIN)liblist.so: LinkedListAPI.o
-	$(CC) -shared -o $(BIN)liblist.so LinkedListAPI.o
 
 LinkedListAPI.o: $(SRC)LinkedListAPI.c $(INC)LinkedListAPI.h
 	$(CC) -I$(INC) $(CFLAGS) -c -fpic $(SRC)LinkedListAPI.c
