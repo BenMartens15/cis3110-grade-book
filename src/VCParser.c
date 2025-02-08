@@ -201,6 +201,9 @@ void deleteProperty(void* toBeDeleted) {
     
     property = (Property*)toBeDeleted;
     free(property->name);
+    if (strlen(property->group) > 0) {
+        free(property->group);
+    }
     freeList(property->parameters);
     freeList(property->values);
     free(property);
@@ -363,7 +366,6 @@ Property* createProperty(Card* card, const char* stringToParse) {
     Property* newProperty = NULL;
 
     newProperty = (Property*)malloc(sizeof(Property));
-    newProperty->group = "";
     newProperty->parameters = initializeList(parameterToString, deleteParameter, compareParameters);
     newProperty->values = initializeList(valueToString, deleteValue, compareValues);
     propertyString = (char*)malloc(strlen(stringToParse) + 1);
@@ -373,6 +375,7 @@ Property* createProperty(Card* card, const char* stringToParse) {
     paramString = strtok(propertyString, ":"); // set paramString to everything before colon
     propertyName = strtok(paramString, ";:");
 
+    // get parameters
     char* paramToken = strtok(NULL, ";");
     while (paramToken) {
         Parameter* newParam = (Parameter*)malloc(sizeof(Parameter));
@@ -385,7 +388,18 @@ Property* createProperty(Card* card, const char* stringToParse) {
         paramToken = strtok(NULL, ";");
         insertBack(newProperty->parameters, newParam);
     }
+
+    // get group
+    if (strchr(propertyName, '.')) {
+        char* group = strtok(propertyName, ".");
+        newProperty->group = (char*)malloc(strlen(group) + 1);
+        strcpy(newProperty->group, group);
+        propertyName = strtok(NULL, "."); // set propertyName to everthing after the '.'
+    } else {
+        newProperty->group = "";
+    }
     
+    // get values
     if (strcasecmp(propertyName, "FN") == 0) {
         char* token = strtok(valueString, ";"); // get the first value
         newProperty->name = (char*)malloc(strlen(propertyName) + 1);

@@ -5,7 +5,7 @@ int main() {
     Card* testCard;
     VCardErrorCode error;
 
-    error = createCard("../testCard-BdayText.vcf", &testCard);
+    error = createCard("../testCardProps-Groups.vcf", &testCard);
     if (error == OK) {
         char* cardString = cardToString(testCard);
         printf("%s\n", cardString);
