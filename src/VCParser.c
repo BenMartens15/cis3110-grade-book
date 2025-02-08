@@ -3,6 +3,7 @@
 #define _GNU_SOURCE
 #include "VCParser.h"
 
+static ssize_t readNextLine(char** currentLine, char** nextLine, FILE* fp, size_t* len);
 static Property* createProperty(Card* card, const char* currentLine);
 static void parsePropertyValues(List* valueList, const char* name, char* valueString);
 static DateTime* createDateTime(char* inputString);
@@ -18,6 +19,7 @@ VCardErrorCode createCard(char* fileName, Card** obj) {
 
     *obj = (Card*)malloc(sizeof(Card));
     newCard = *obj;
+    newCard->fn = NULL;
     newCard->optionalProperties = initializeList(propertyToString, deleteProperty, compareProperties);
     newCard->birthday = NULL;
     newCard->anniversary = NULL;
@@ -28,72 +30,42 @@ VCardErrorCode createCard(char* fileName, Card** obj) {
         goto EXIT;
     }
 
-    // get the first line to make sure it contains the BEGIN:VCARD property
-    getline(&currentLine, &len, fp);
-    currentLine[strlen(currentLine) - 2] = '\0'; // remove the \r\n from the string
-    getline(&nextLine, &len, fp);
-    nextLine[strlen(nextLine) - 2] = '\0'; // remove the \r\n from the string
-    
-    while (nextLine[0] == ' ') {
-        currentLine = (char*)realloc(currentLine, strlen(currentLine) + strlen(nextLine));
-        if (currentLine) {
-            strcat(currentLine, nextLine + 1);
-        } else {
-            error = OTHER_ERROR;
-            goto EXIT;
-        }
-        getline(&nextLine, &len, fp);
-        nextLine[strlen(nextLine) - 2] = '\0';
+    // read the first line and make sure it is the BEGIN:VCARD property
+    if (readNextLine(&currentLine, &nextLine, fp, &len) == -1) {
+        error = INV_PROP;
+        goto EXIT;
     }
-
-    if (strncasecmp(currentLine, "BEGIN:VCARD", strlen(currentLine)) != 0) {
+    if (strcasecmp(currentLine, "BEGIN:VCARD") != 0) {
         error = INV_CARD;
         goto EXIT;
     }
 
-    // copy nextLine to currentLine
-    currentLine = (char*)realloc(currentLine, strlen(nextLine) + 1);
-    if (currentLine) {
-        snprintf(currentLine, strlen(nextLine) + 1, "%s", nextLine);
-    } else {
-        error = OTHER_ERROR;
+    // read the second line and make sure it is the VERSION:4.0 property
+    if (readNextLine(&currentLine, &nextLine, fp, &len) == -1) {
+        error = INV_PROP;
+        goto EXIT;
+    }
+    if (strcasecmp(currentLine, "VERSION:4.0") != 0) {
+        error = INV_CARD;
         goto EXIT;
     }
 
     // read the file line-by-line (unfolding any folded lines)
-    while (getline(&nextLine, &len, fp) != -1) {
-        nextLine[strlen(nextLine) - 2] = '\0'; // remove the \r\n from the string
-        while (nextLine[0] == ' ') {
-            currentLine = (char*)realloc(currentLine, strlen(currentLine) + strlen(nextLine));
-            if (currentLine) {
-                strcat(currentLine, nextLine + 1);
-            } else {
-                error = OTHER_ERROR;
-                goto EXIT;
-            }
-            getline(&nextLine, &len, fp);
-            nextLine[strlen(nextLine) - 2] = '\0';
-        }
-
-        // if (createProperty(newCard, currentLine) == NULL) {
-        //     error = INV_PROP;
-        //     goto EXIT;
-        // }
-
-        // don't check return value for now until I have all of the properties implemented
-        createProperty(newCard, currentLine);
-
-        // copy nextLine to currentLine
-        currentLine = (char*)realloc(currentLine, strlen(nextLine) + 1);
-        if (currentLine) {
-            snprintf(currentLine, strlen(nextLine) + 1, "%s", nextLine);
-        } else {
-            error = OTHER_ERROR;
+    while (readNextLine(&currentLine, &nextLine, fp, &len) != -1) {
+        if (createProperty(newCard, currentLine) == NULL) {
+            error = INV_PROP;
             goto EXIT;
         }
     }
 
-    if (strncasecmp(currentLine, "END:VCARD", strlen(currentLine)) != 0) {
+    // make sure the file contains the FN property
+    if (newCard->fn == NULL) {
+        error = INV_CARD;
+        goto EXIT;
+    }
+
+    // make sure the file ends with the END:VCARD property
+    if (strcasecmp(currentLine, "END:VCARD") != 0) {
         error = INV_CARD;
         goto EXIT;
     }
@@ -157,31 +129,31 @@ char* errorToString(VCardErrorCode err) {
     {
     case OK:
         err_string = (char*)malloc(3);
-        err_string = "OK";
+        strcpy(err_string, "OK");
         break;
     case INV_FILE:
         err_string = (char*)malloc(9);
-        err_string = "INV_FILE";
+        strcpy(err_string, "INV_FILE");
         break;
     case INV_CARD:
         err_string = (char*)malloc(9);
-        err_string = "INV_CARD";
+        strcpy(err_string, "INV_CARD");
         break;
     case INV_PROP:
         err_string = (char*)malloc(9);
-        err_string = "INV_PROP";
+        strcpy(err_string, "INV_PROP");
         break;
     case INV_DT:
         err_string = (char*)malloc(7);
-        err_string = "INV_DT";
+        strcpy(err_string, "INV_DT");
         break;
     case WRITE_ERROR:
         err_string = (char*)malloc(12);
-        err_string = "WRITE_ERROR";
+        strcpy(err_string, "WRITE_ERROR");
         break;
     case OTHER_ERROR:
         err_string = (char*)malloc(12);
-        err_string = "OTHER_ERROR";
+        strcpy(err_string, "OTHER_ERROR");
         break;   
     default:
         break;
@@ -358,6 +330,57 @@ char* dateToString(void* date) {
 // **************************************************************************
 
 // ************* Static helper functions ************************************
+ssize_t readNextLine(char** currentLine, char** nextLine, FILE* fp, size_t* len) {
+    ssize_t read_size = 0;
+
+    if (*currentLine == NULL) {
+        getline(currentLine, len, fp);
+        if (*(*currentLine + strlen(*currentLine) - 2) != '\r') { // make sure line ends with "\r\n"
+            return -1;
+        }
+        *(*currentLine + strlen(*currentLine) - 2) = '\0'; // remove the \r\n from the string
+        read_size = getline(nextLine, len, fp);
+        if (*(*nextLine + strlen(*nextLine) - 2) != '\r') { // make sure line ends with "\r\n"
+            return -1;
+        }
+        *(*nextLine + strlen(*nextLine) - 2) = '\0'; // remove the \r\n from the string
+        while (*nextLine[0] == ' ') {
+            *currentLine = (char*)realloc(*currentLine, strlen(*currentLine) + strlen(*nextLine));
+            strcat(*currentLine, *nextLine + 1);
+            read_size = getline(nextLine, len, fp);
+            if (*(*nextLine + strlen(*nextLine) - 2) != '\r') { // make sure line ends with "\r\n"
+                return -1;
+            }
+            *(*nextLine + strlen(*nextLine) - 2) = '\0';
+        }
+    } else {
+        // copy nextLine to currentLine
+        *currentLine = (char*)realloc(*currentLine, strlen(*nextLine) + 1);
+        if (*currentLine) {
+            snprintf(*currentLine, strlen(*nextLine) + 1, "%s", *nextLine);
+        } else {
+            return -1;
+        }
+
+        read_size = getline(nextLine, len, fp);
+        if (*(*nextLine + strlen(*nextLine) - 2) != '\r') { // make sure line ends with "\r\n"
+            return -1;
+        }
+        *(*nextLine + strlen(*nextLine) - 2) = '\0'; // remove the \r\n from the string
+        while (*nextLine[0] == ' ') {
+            *currentLine = (char*)realloc(*currentLine, strlen(*currentLine) + strlen(*nextLine));
+            strcat(*currentLine, *nextLine + 1);
+            read_size = getline(nextLine, len, fp);
+            if (*(*nextLine + strlen(*nextLine) - 2) != '\r') { // make sure line ends with "\r\n"
+                return -1;
+            }
+            *(*nextLine + strlen(*nextLine) - 2) = '\0';
+        }
+    }
+
+    return read_size;
+}
+
 Property* createProperty(Card* card, const char* stringToParse) {
     char* propertyName = NULL;
     char* paramString = NULL;
@@ -375,6 +398,13 @@ Property* createProperty(Card* card, const char* stringToParse) {
     paramString = strtok(propertyString, ":"); // set paramString to everything before colon
     propertyName = strtok(paramString, ";:");
 
+    if (strlen(valueString) == 0) {
+        return NULL;
+    }
+    if (strlen(propertyName) == 0) {
+        return NULL;
+    }
+
     // get parameters
     char* paramToken = strtok(NULL, ";");
     while (paramToken) {
@@ -385,6 +415,9 @@ Property* createProperty(Card* card, const char* stringToParse) {
         strncpy(newParam->name, paramToken, paramNameLen + 1);
         newParam->name[paramNameLen] = '\0';
         strncpy(newParam->value, paramToken + paramNameLen + 1, strlen(paramToken) - paramNameLen);
+        if (strlen(newParam->value) == 0) {
+            return NULL;
+        }
         paramToken = strtok(NULL, ";");
         insertBack(newProperty->parameters, newParam);
     }

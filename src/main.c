@@ -5,13 +5,15 @@ int main() {
     Card* testCard;
     VCardErrorCode error;
 
-    error = createCard("../testCardProps-Groups.vcf", &testCard);
+    error = createCard("../testCard.vcf", &testCard);
     if (error == OK) {
         char* cardString = cardToString(testCard);
         printf("%s\n", cardString);
         free(cardString);
     } else {
-        printf("Error: %d\n", error);
+        char* error_string = errorToString(error);
+        printf("%s\n", error_string);
+        free(error_string);
     }
     deleteCard(testCard);
 }
