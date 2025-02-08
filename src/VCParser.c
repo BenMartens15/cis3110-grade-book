@@ -5,6 +5,7 @@
 
 static Property* createProperty(Card* card, const char* currentLine);
 static void parsePropertyValues(List* valueList, const char* name, char* valueString);
+static DateTime* createDateTime(char* inputString);
 
 // ************* Card parser ***********************************************
 VCardErrorCode createCard(char* fileName, Card** obj) {
@@ -34,7 +35,7 @@ VCardErrorCode createCard(char* fileName, Card** obj) {
     nextLine[strlen(nextLine) - 2] = '\0'; // remove the \r\n from the string
     
     while (nextLine[0] == ' ') {
-        currentLine = realloc(currentLine, strlen(currentLine) + strlen(nextLine));
+        currentLine = (char*)realloc(currentLine, strlen(currentLine) + strlen(nextLine));
         if (currentLine) {
             strcat(currentLine, nextLine + 1);
         } else {
@@ -51,7 +52,7 @@ VCardErrorCode createCard(char* fileName, Card** obj) {
     }
 
     // copy nextLine to currentLine
-    currentLine = realloc(currentLine, strlen(nextLine) + 1);
+    currentLine = (char*)realloc(currentLine, strlen(nextLine) + 1);
     if (currentLine) {
         snprintf(currentLine, strlen(nextLine) + 1, "%s", nextLine);
     } else {
@@ -63,7 +64,7 @@ VCardErrorCode createCard(char* fileName, Card** obj) {
     while (getline(&nextLine, &len, fp) != -1) {
         nextLine[strlen(nextLine) - 2] = '\0'; // remove the \r\n from the string
         while (nextLine[0] == ' ') {
-            currentLine = realloc(currentLine, strlen(currentLine) + strlen(nextLine));
+            currentLine = (char*)realloc(currentLine, strlen(currentLine) + strlen(nextLine));
             if (currentLine) {
                 strcat(currentLine, nextLine + 1);
             } else {
@@ -83,7 +84,7 @@ VCardErrorCode createCard(char* fileName, Card** obj) {
         createProperty(newCard, currentLine);
 
         // copy nextLine to currentLine
-        currentLine = realloc(currentLine, strlen(nextLine) + 1);
+        currentLine = (char*)realloc(currentLine, strlen(nextLine) + 1);
         if (currentLine) {
             snprintf(currentLine, strlen(nextLine) + 1, "%s", nextLine);
         } else {
@@ -108,6 +109,8 @@ EXIT:
 
 void deleteCard(Card* obj) {
     deleteProperty(obj->fn);
+    deleteDate(obj->birthday);
+    deleteDate(obj->anniversary);
     freeList(obj->optionalProperties);
     free(obj);
 }
@@ -115,16 +118,33 @@ void deleteCard(Card* obj) {
 char* cardToString(const Card* obj) {
     char* cardString = NULL;
     char* fullName = NULL;
+    char* birthday = NULL;
+    char* anniversary = NULL;
     char* optionalProperties = NULL;
 
     fullName = propertyToString(obj->fn);
+    birthday = dateToString(obj->birthday);
+    anniversary = dateToString(obj->anniversary);
     optionalProperties = toString(obj->optionalProperties);
 
-    int length = strlen(fullName) + strlen(optionalProperties) + 1;
-    cardString = (char*)malloc(length);
-    snprintf(cardString, length, "%s%s", fullName, optionalProperties);
+    cardString = (char*)malloc(strlen(fullName) + 1);
+    strcpy(cardString, fullName);
+    if (birthday) {
+        cardString = (char*)realloc(cardString, strlen(cardString) + 5 + strlen(birthday) + 1);
+        strcat(cardString, "BDAY:");
+        strcat(cardString, birthday);
+    }
+    if (anniversary) {
+        cardString = (char*)realloc(cardString, strlen(cardString) + 13 + strlen(anniversary) + 1);
+        strcat(cardString, "ANNIVERSARY:");
+        strcat(cardString, anniversary);
+    }
+    cardString = (char*)realloc(cardString, strlen(cardString) + strlen(optionalProperties) + 1);
+    strcat(cardString, optionalProperties);
 
     free(fullName);
+    free(birthday);
+    free(anniversary);
     free(optionalProperties); 
 
     return cardString;
@@ -209,20 +229,20 @@ char* propertyToString(void* prop) {
     while ((paramElem = nextElement(&paramIter)) != NULL) {
         Parameter* param = (Parameter*)paramElem;
         size_t length = 1 + strlen(param->name) + 1 + strlen(param->value) + 1;
-        propertyString = realloc(propertyString, strlen(propertyString) + length);
+        propertyString = (char*)realloc(propertyString, strlen(propertyString) + length);
         strcat(propertyString, ";");
         strcat(propertyString, param->name);
         strcat(propertyString, "=");
         strcat(propertyString, param->value);
     }
-    propertyString = realloc(propertyString, strlen(propertyString) + 2);
+    propertyString = (char*)realloc(propertyString, strlen(propertyString) + 2);
     strcat(propertyString, ":");
 
     void* valueElem;
     ListIterator valueIter = createIterator(property->values);
     while ((valueElem = nextElement(&valueIter)) != NULL) {
         char* value = (char*)valueElem;
-        propertyString = realloc(propertyString, strlen(propertyString) + strlen(value) + 2);
+        propertyString = (char*)realloc(propertyString, strlen(propertyString) + strlen(value) + 2);
         strcat(propertyString, property->values->printData(value));
         strcat(propertyString, ";");
     }
@@ -279,9 +299,56 @@ char* valueToString(void* val) {
     return outString;
 }
 
-void deleteDate(void* toBeDeleted);
+void deleteDate(void* toBeDeleted) {
+    DateTime* dateTime = NULL;
+
+    if (toBeDeleted == NULL) {
+        return;
+    }
+
+    dateTime = (DateTime*)toBeDeleted;
+    if (dateTime->date[0] != '\0') {
+        free(dateTime->date);
+    }
+    if (dateTime->time[0] != '\0') {
+        free(dateTime->time);
+    }
+    if (dateTime->text[0] != '\0') {
+        free(dateTime->text);
+    }
+    free(dateTime);
+}
+
 int compareDates(const void* first,const void* second);
-char* dateToString(void* date);
+
+char* dateToString(void* date) {
+    DateTime* dateTime = NULL;
+    char* dateTimeString = NULL;
+
+    if (date == NULL) {
+        return "";
+    }
+
+    dateTime = (DateTime*)date;
+
+    size_t length;
+    if (strlen(dateTime->time) > 0) {
+        length = strlen(dateTime->date) + 1 + strlen(dateTime->time) + 1;
+        dateTimeString = (char*)malloc(length + 1);
+        snprintf(dateTimeString, length + 1, "%sT%s\n", dateTime->date, dateTime->time);
+    } else {
+        length = strlen(dateTime->date) + 1;
+        dateTimeString = (char*)malloc(length + 1);
+        snprintf(dateTimeString, length + 1, "%s\n", dateTime->date);
+    }
+
+    if (dateTime->UTC) {
+        dateTimeString = (char*)realloc(dateTimeString, strlen(dateTimeString) + 2);
+        strcat(dateTimeString, "Z");
+    }
+    
+    return dateTimeString;
+}
 // **************************************************************************
 
 // ************* Static helper functions ************************************
@@ -324,6 +391,20 @@ Property* createProperty(Card* card, const char* stringToParse) {
         strcpy(value, token);
         insertBack(newProperty->values, (void*)value);
         card->fn = newProperty;
+    } else if (strcasecmp(propertyName, "BDAY") == 0) {
+        // have to figure out how to check the value parameter to see if it is text, but for now just assume not
+        card->birthday = createDateTime(valueString);
+        // free the property that was created since it didn't actually get used
+        freeList(newProperty->parameters);
+        freeList(newProperty->values);
+        free(newProperty);
+    } else if (strcasecmp(propertyName, "ANNIVERSARY") == 0) {
+        // have to figure out how to check the value parameter to see if it is text, but for now just assume not
+        card->anniversary = createDateTime(valueString);
+        // free the property that was created since it didn't actually get used
+        freeList(newProperty->parameters);
+        freeList(newProperty->values);
+        free(newProperty);
     } else if (strcasecmp(propertyName, "SOURCE") == 0 ||
             strcasecmp(propertyName, "KIND") == 0 ||
             strcasecmp(propertyName, "XML") == 0 ||
@@ -387,7 +468,43 @@ void parsePropertyValues(List* valueList, const char* name, char* valueString) {
 
     // get the last value
     char* value = (char*)malloc(strlen(previousDelim) + 1);
-    strcat(value, previousDelim);
+    strcpy(value, previousDelim);
     insertBack(valueList, (void*)value);
+}
+
+DateTime* createDateTime(char* inputString) {    
+    DateTime* dateTime = (DateTime*)malloc(sizeof(DateTime));
+    char* date = NULL;
+    char* time = NULL;
+
+    dateTime->UTC = false;
+    dateTime->date = "";
+    dateTime->time = "";
+    dateTime->isText = false; // this function should only be called for date-and-or-time inputs
+    dateTime->text = "";
+
+    if (inputString[strlen(inputString) - 1] == 'Z') {
+        dateTime->UTC = true;
+        inputString[strlen(inputString)] = '\0'; // remove the Z
+    }
+
+    if (inputString[0] == 'T') {
+        time = (char*)malloc(strlen(inputString + 1) + 1);
+        strcpy(time, inputString + 1);
+        dateTime->time = time;
+    } else {
+        char* token = strtok(inputString, "T");
+        date = (char*)malloc(strlen(token) + 1);
+        strcpy(date, token);
+        dateTime->date = date;
+        token = strtok(NULL, "");
+        if (token) {
+            time = (char*)malloc(strlen(token) + 1);
+            strcpy(time, token);
+            dateTime->time = time;
+        }
+    }
+
+    return dateTime;
 }
 // **************************************************************************
