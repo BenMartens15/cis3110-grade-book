@@ -13,8 +13,13 @@ VCardErrorCode createCard(char* fileName, Card** obj) {
     char* currentLine = NULL;
     char* nextLine = NULL;
     size_t len = 0;
+    Card* newCard = NULL;
 
-    Card* newCard = *obj;
+    *obj = (Card*)malloc(sizeof(Card));
+    newCard = *obj;
+    newCard->optionalProperties = initializeList(propertyToString, deleteProperty, compareProperties);
+    newCard->birthday = NULL;
+    newCard->anniversary = NULL;
 
     fp = fopen(fileName, "r");
     if (fp == NULL) {
@@ -125,7 +130,45 @@ char* cardToString(const Card* obj) {
     return cardString;
 }
 
-char* errorToString(VCardErrorCode err);
+char* errorToString(VCardErrorCode err) {
+    char* err_string = NULL;
+
+    switch (err)
+    {
+    case OK:
+        err_string = (char*)malloc(3);
+        err_string = "OK";
+        break;
+    case INV_FILE:
+        err_string = (char*)malloc(9);
+        err_string = "INV_FILE";
+        break;
+    case INV_CARD:
+        err_string = (char*)malloc(9);
+        err_string = "INV_CARD";
+        break;
+    case INV_PROP:
+        err_string = (char*)malloc(9);
+        err_string = "INV_PROP";
+        break;
+    case INV_DT:
+        err_string = (char*)malloc(7);
+        err_string = "INV_DT";
+        break;
+    case WRITE_ERROR:
+        err_string = (char*)malloc(12);
+        err_string = "WRITE_ERROR";
+        break;
+    case OTHER_ERROR:
+        err_string = (char*)malloc(12);
+        err_string = "OTHER_ERROR";
+        break;   
+    default:
+        break;
+    }
+    
+    return err_string;
+}
 // *************************************************************************
 
 // ************* List helper functions ************************************* 
@@ -309,7 +352,6 @@ Property* createProperty(Card* card, const char* stringToParse) {
             strcasecmp(propertyName, "UID") == 0 ||
             strcasecmp(propertyName, "CLIENTPIDMAP") == 0 ||
             strcasecmp(propertyName, "URL") == 0 ||
-            strcasecmp(propertyName, "VERSION") == 0 ||
             strcasecmp(propertyName, "KEY") == 0 ||
             strcasecmp(propertyName, "FBURL") == 0 ||
             strcasecmp(propertyName, "CALADRURI") == 0 ||
@@ -331,13 +373,21 @@ Property* createProperty(Card* card, const char* stringToParse) {
 }
 
 void parsePropertyValues(List* valueList, const char* name, char* valueString) {
-    char* token = strtok(valueString, ";"); // get the first value
+    char* previousDelim = valueString;
+    char* nextDelim = strpbrk(valueString, ";");
 
-    while (token != NULL) {
-        char* value = (char*)malloc(strlen(token) + 1);
-        strcpy(value, token);
+    while (nextDelim != NULL) {
+        char* value = (char*)malloc(nextDelim - previousDelim + 1);
+        strncpy(value, previousDelim, nextDelim - previousDelim + 1);
+        value[nextDelim - previousDelim] = '\0';
         insertBack(valueList, (void*)value);
-        token = strtok(NULL, ";");
+        previousDelim = nextDelim + 1;
+        nextDelim = strpbrk(nextDelim + 1, ";");
     }
+
+    // get the last value
+    char* value = (char*)malloc(strlen(previousDelim) + 1);
+    strcat(value, previousDelim);
+    insertBack(valueList, (void*)value);
 }
 // **************************************************************************

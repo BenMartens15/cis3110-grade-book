@@ -2,11 +2,7 @@
 #include "VCParser.h"
 
 int main() {
-    Card* testCard = (Card*)malloc(sizeof(Card));
-    testCard->optionalProperties = initializeList(propertyToString, deleteProperty, compareProperties);
-    testCard->birthday = NULL;
-    testCard->anniversary = NULL;
-
+    Card* testCard;
     VCardErrorCode error;
 
     error = createCard("../testCard.vcf", &testCard);
