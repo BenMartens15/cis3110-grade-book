@@ -10,10 +10,10 @@ int main() {
         char* cardString = cardToString(testCard);
         printf("%s\n", cardString);
         free(cardString);
+        deleteCard(testCard);
     } else {
         char* error_string = errorToString(error);
         printf("%s\n", error_string);
         free(error_string);
     }
-    deleteCard(testCard);
 }

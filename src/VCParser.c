@@ -71,6 +71,10 @@ VCardErrorCode createCard(char* fileName, Card** obj) {
     }
 
 EXIT:
+    if (error != OK) {
+        deleteCard(newCard);
+        newCard = NULL;
+    }
     if (fp) {
         fclose(fp);
     }
@@ -156,6 +160,8 @@ char* errorToString(VCardErrorCode err) {
         strcpy(err_string, "OTHER_ERROR");
         break;   
     default:
+        err_string = (char*)malloc(19);
+        strcpy(err_string, "Invalid error code");
         break;
     }
     
@@ -173,7 +179,7 @@ void deleteProperty(void* toBeDeleted) {
     
     property = (Property*)toBeDeleted;
     free(property->name);
-    if (strlen(property->group) > 0) {
+    if (property->group && strlen(property->group) > 0) {
         free(property->group);
     }
     freeList(property->parameters);
@@ -389,19 +395,28 @@ Property* createProperty(Card* card, const char* stringToParse) {
     Property* newProperty = NULL;
 
     newProperty = (Property*)malloc(sizeof(Property));
+    newProperty->name = NULL;
+    newProperty->group = NULL;
     newProperty->parameters = initializeList(parameterToString, deleteParameter, compareParameters);
     newProperty->values = initializeList(valueToString, deleteValue, compareValues);
     propertyString = (char*)malloc(strlen(stringToParse) + 1);
     snprintf(propertyString, strlen(stringToParse) + 1, "%s", stringToParse);
     
-    valueString = strpbrk(propertyString, ":") + 1; // set valueString to everything after colon
+    valueString = strpbrk(propertyString, ":"); 
+    if (valueString) {
+        valueString = valueString + 1; // set valueString to everything after colon
+    } else { // no colon in the string
+        free(propertyString);
+        deleteProperty(newProperty);
+        return NULL;
+    }
     paramString = strtok(propertyString, ":"); // set paramString to everything before colon
     propertyName = strtok(paramString, ";:");
 
-    if (strlen(valueString) == 0) {
-        return NULL;
-    }
+
     if (strlen(propertyName) == 0) {
+        free(propertyString);
+        deleteProperty(newProperty);
         return NULL;
     }
 
@@ -416,6 +431,9 @@ Property* createProperty(Card* card, const char* stringToParse) {
         newParam->name[paramNameLen] = '\0';
         strncpy(newParam->value, paramToken + paramNameLen + 1, strlen(paramToken) - paramNameLen);
         if (strlen(newParam->value) == 0) {
+            free(propertyString);
+            deleteParameter(newParam);
+            deleteProperty(newProperty);
             return NULL;
         }
         paramToken = strtok(NULL, ";");
