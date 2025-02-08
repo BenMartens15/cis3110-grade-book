@@ -326,13 +326,16 @@ char* dateToString(void* date) {
     char* dateTimeString = NULL;
 
     if (date == NULL) {
-        return "";
+        return NULL;
     }
 
     dateTime = (DateTime*)date;
 
     size_t length;
-    if (strlen(dateTime->time) > 0) {
+    if (dateTime->isText) {
+        dateTimeString = (char*)malloc(strlen(dateTime->text) + 1);
+        strcpy(dateTimeString, dateTime->text);
+    } else if (strlen(dateTime->time) > 0) {
         length = strlen(dateTime->date) + 1 + strlen(dateTime->time) + 1;
         dateTimeString = (char*)malloc(length + 1);
         snprintf(dateTimeString, length + 1, "%sT%s\n", dateTime->date, dateTime->time);
@@ -392,15 +395,57 @@ Property* createProperty(Card* card, const char* stringToParse) {
         insertBack(newProperty->values, (void*)value);
         card->fn = newProperty;
     } else if (strcasecmp(propertyName, "BDAY") == 0) {
-        // have to figure out how to check the value parameter to see if it is text, but for now just assume not
-        card->birthday = createDateTime(valueString);
+        bool isText = false;
+        void* element;
+        ListIterator iter = createIterator(newProperty->parameters);
+        while ((element = nextElement(&iter)) != NULL) {
+            Parameter* param = (Parameter*)element;
+            if (strcasecmp(param->name, "VALUE") == 0 && strcasecmp(param->value, "text") == 0) {
+                isText = true;
+                break;
+            }
+        }
+
+        if (isText) {
+            card->birthday = (DateTime*)malloc(sizeof(DateTime));
+            card->birthday->UTC = false;
+            card->birthday->isText = true;
+            card->birthday->date = "";
+            card->birthday->time = "";
+            card->birthday->text = (char*)malloc(strlen(valueString) + 1);
+            strcpy(card->birthday->text, valueString);
+        } else {
+            card->birthday = createDateTime(valueString);
+        }
+
         // free the property that was created since it didn't actually get used
         freeList(newProperty->parameters);
         freeList(newProperty->values);
         free(newProperty);
     } else if (strcasecmp(propertyName, "ANNIVERSARY") == 0) {
-        // have to figure out how to check the value parameter to see if it is text, but for now just assume not
-        card->anniversary = createDateTime(valueString);
+        bool isText = false;
+        void* element;
+        ListIterator iter = createIterator(newProperty->parameters);
+        while ((element = nextElement(&iter)) != NULL) {
+            Parameter* param = (Parameter*)element;
+            if (strcasecmp(param->name, "VALUE") == 0 && strcasecmp(param->value, "text") == 0) {
+                isText = true;
+                break;
+            }
+        }
+
+        if (isText) {
+            card->anniversary = (DateTime*)malloc(sizeof(DateTime));
+            card->anniversary->UTC = false;
+            card->anniversary->isText = true;
+            card->anniversary->date = "";
+            card->anniversary->time = "";
+            card->anniversary->text = (char*)malloc(strlen(valueString) + 1);
+            strcpy(card->anniversary->text, valueString);
+        } else {
+            card->anniversary = createDateTime(valueString);
+        }
+
         // free the property that was created since it didn't actually get used
         freeList(newProperty->parameters);
         freeList(newProperty->values);
