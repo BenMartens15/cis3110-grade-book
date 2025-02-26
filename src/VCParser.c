@@ -17,18 +17,31 @@ VCardErrorCode createCard(char* fileName, Card** obj) {
     size_t len = 0;
     Card* newCard = NULL;
 
+    if (obj == NULL) {
+        return OTHER_ERROR;
+    }
+
+    if (fileName == NULL) {
+        return INV_FILE;
+    }
+
+    // check the file extension
+    char* extension = strrchr(fileName, '.');
+    if (extension == NULL || (strcmp(extension, ".vcf") != 0 && strcmp(extension, ".vcard") != 0)) {
+        return INV_FILE;
+    }
+
+    fp = fopen(fileName, "r");
+    if (fp == NULL) {
+        return INV_FILE;
+    }
+
     *obj = (Card*)malloc(sizeof(Card));
     newCard = *obj;
     newCard->fn = NULL;
     newCard->optionalProperties = initializeList(propertyToString, deleteProperty, compareProperties);
     newCard->birthday = NULL;
     newCard->anniversary = NULL;
-
-    fp = fopen(fileName, "r");
-    if (fp == NULL) {
-        error = INV_FILE;
-        goto EXIT;
-    }
 
     // read the first line and make sure it is the BEGIN:VCARD property
     if (readNextLine(&currentLine, &nextLine, fp, &len) == -1) {
@@ -84,6 +97,10 @@ EXIT:
 }
 
 void deleteCard(Card* obj) {
+    if (obj == NULL) {
+        return;
+    }
+
     deleteProperty(obj->fn);
     deleteDate(obj->birthday);
     deleteDate(obj->anniversary);
@@ -97,6 +114,12 @@ char* cardToString(const Card* obj) {
     char* birthday = NULL;
     char* anniversary = NULL;
     char* optionalProperties = NULL;
+
+    if (obj == NULL) {
+        cardString = (char*)malloc(5);
+        strcpy(cardString, "null");
+        return cardString;
+    }
 
     fullName = propertyToString(obj->fn);
     birthday = dateToString(obj->birthday);
@@ -187,8 +210,50 @@ void deleteProperty(void* toBeDeleted) {
     free(property);
 }
 
-int compareProperties(const void* first,const void* second) {
-    return 0;
+int compareProperties(const void* first, const void* second) {
+    Property* firstProperty = NULL;
+    Property* secondProperty = NULL;
+    int ret = 0;
+
+    if (first == NULL || second == NULL) {
+        return 1;
+    }
+
+    firstProperty = (Property*)first;
+    secondProperty = (Property*)second;
+
+    ret += strcasecmp(firstProperty->name, secondProperty->name);
+    ret += strcasecmp(firstProperty->group, secondProperty->group);
+
+    if (getLength(firstProperty->parameters) != getLength(secondProperty->parameters)) {
+        ret++;
+    }
+
+    void* elemFirst;
+    void* elemSecond;
+    ListIterator iter1 = createIterator(firstProperty->parameters);
+    ListIterator iter2 = createIterator(secondProperty->parameters);
+    while ((elemFirst = nextElement(&iter1)) != NULL && (elemSecond = nextElement(&iter2)) != NULL) {
+        Parameter* paramFirst = (Parameter*)elemFirst;
+        Parameter* paramSecond = (Parameter*)elemSecond;
+        ret += compareParameters(paramFirst, paramSecond);
+    }
+
+    if (getLength(firstProperty->values) != getLength(secondProperty->values)) {
+        ret++;
+    }
+
+    elemFirst = NULL;
+    elemSecond = NULL;
+    iter1 = createIterator(firstProperty->values);
+    iter2 = createIterator(secondProperty->values);
+    while ((elemFirst = nextElement(&iter1)) != NULL && (elemSecond = nextElement(&iter2)) != NULL) {
+        char* valueFirst = (char*)elemFirst;
+        char* valueSecond = (char*)elemSecond;
+        ret += compareValues(valueFirst, valueSecond);
+    }
+
+    return ret;
 }
 
 char* propertyToString(void* prop) {
@@ -245,8 +310,22 @@ void deleteParameter(void* toBeDeleted) {
     free(param);
 }
 
-int compareParameters(const void* first,const void* second) {
-    return 0;
+int compareParameters(const void* first, const void* second) {
+    Parameter* firstParam = NULL;
+    Parameter* secondParam = NULL;
+    int ret = 0;
+
+    if (first == NULL || second == NULL) {
+        return 1;
+    }
+
+    firstParam = (Parameter*)first;
+    secondParam = (Parameter*)second;
+
+    ret += strcasecmp(firstParam->name, secondParam->name);
+    ret += strcasecmp(firstParam->value, secondParam->value);
+
+    return ret;
 }
 
 char* parameterToString(void* param) {
@@ -270,8 +349,21 @@ void deleteValue(void* toBeDeleted) {
     free(value);
 }
 
-int compareValues(const void* first,const void* second) {
-    return 0;
+int compareValues(const void* first, const void* second) {
+    char* firstValue = NULL;
+    char* secondValue = NULL;
+    int ret = 0;
+
+    if (first == NULL || second == NULL) {
+        return 1;
+    }
+
+    firstValue = (char*)first;
+    secondValue = (char*)second;
+
+    ret += strcmp(firstValue, secondValue);
+
+    return ret;
 }
 
 char* valueToString(void* val) {
@@ -300,7 +392,9 @@ void deleteDate(void* toBeDeleted) {
     free(dateTime);
 }
 
-int compareDates(const void* first,const void* second);
+int compareDates(const void* first, const void* second) {
+    return 0;
+}
 
 char* dateToString(void* date) {
     DateTime* dateTime = NULL;
